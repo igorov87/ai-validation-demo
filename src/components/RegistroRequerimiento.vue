@@ -2,7 +2,9 @@
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
       <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <h2 class="text-2xl font-bold text-gray-800">Nuevo Requerimiento</h2>
+        <h2 class="text-2xl font-bold text-gray-800">
+          {{ modoEdicion ? 'Editar Requerimiento' : 'Nuevo Requerimiento' }}
+        </h2>
         <button
           @click="$emit('cerrar')"
           class="text-gray-500 hover:text-gray-700 text-2xl font-bold"
@@ -168,7 +170,7 @@
             type="submit"
             class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-200"
           >
-            Guardar Requerimiento
+            Guardar
           </button>
         </div>
       </form>
@@ -177,11 +179,17 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 
 export default {
   name: 'RegistroRequerimiento',
-  emits: ['cerrar', 'guardar'],
+  props: {
+    requerimientoEditar: {
+      type: Object,
+      default: null
+    }
+  },
+  emits: ['cerrar', 'guardar', 'actualizar'],
   setup(props, { emit }) {
     const formulario = ref({
       tipo: '',
@@ -196,30 +204,65 @@ export default {
       observaciones: ''
     })
 
+    // Determinar si estamos en modo edición
+    const modoEdicion = computed(() => props.requerimientoEditar !== null)
+
+    // Cargar datos del requerimiento a editar
+    onMounted(() => {
+      if (props.requerimientoEditar) {
+        formulario.value = {
+          tipo: props.requerimientoEditar.tipo || '',
+          nombreCliente: props.requerimientoEditar.nombreCliente || '',
+          numeroPoliza: props.requerimientoEditar.numeroPoliza || '',
+          telefono: props.requerimientoEditar.telefono || '',
+          email: props.requerimientoEditar.email || '',
+          tipoSiniestro: props.requerimientoEditar.tipoSiniestro || '',
+          tipoSolicitud: props.requerimientoEditar.tipoSolicitud || '',
+          prioridad: props.requerimientoEditar.prioridad || 'media',
+          descripcion: props.requerimientoEditar.descripcion || '',
+          observaciones: props.requerimientoEditar.observaciones || ''
+        }
+      }
+    })
+
+    // Vigilar cambios en la prop para actualizar el formulario
+    watch(() => props.requerimientoEditar, (nuevoValor) => {
+      if (nuevoValor) {
+        formulario.value = {
+          tipo: nuevoValor.tipo || '',
+          nombreCliente: nuevoValor.nombreCliente || '',
+          numeroPoliza: nuevoValor.numeroPoliza || '',
+          telefono: nuevoValor.telefono || '',
+          email: nuevoValor.email || '',
+          tipoSiniestro: nuevoValor.tipoSiniestro || '',
+          tipoSolicitud: nuevoValor.tipoSolicitud || '',
+          prioridad: nuevoValor.prioridad || 'media',
+          descripcion: nuevoValor.descripcion || '',
+          observaciones: nuevoValor.observaciones || ''
+        }
+      }
+    })
+
     const resetearCamposEspecificos = () => {
       formulario.value.tipoSiniestro = ''
       formulario.value.tipoSolicitud = ''
     }
 
     const guardar = () => {
-      emit('guardar', { ...formulario.value })
-      // Resetear formulario
-      formulario.value = {
-        tipo: '',
-        nombreCliente: '',
-        numeroPoliza: '',
-        telefono: '',
-        email: '',
-        tipoSiniestro: '',
-        tipoSolicitud: '',
-        prioridad: 'media',
-        descripcion: '',
-        observaciones: ''
+      if (modoEdicion.value) {
+        // Emitir evento de actualización con el ID del requerimiento
+        emit('actualizar', props.requerimientoEditar.id, { ...formulario.value })
+      } else {
+        // Emitir evento de creación
+        emit('guardar', { ...formulario.value })
       }
+      
+      // No resetear el formulario aquí, el componente padre lo cerrará
     }
 
     return {
       formulario,
+      modoEdicion,
       resetearCamposEspecificos,
       guardar
     }

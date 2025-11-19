@@ -1,0 +1,170 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { correoService } from '@/services/correo.service'
+import correoApi from '@/api/correo'
+
+// Mock de la API
+vi.mock('@/api/correo')
+
+describe('correoService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('enviarRequerimientoPorCorreo', () => {
+    it('debe enviar un requerimiento por correo exitosamente', async () => {
+      const mockRequerimiento = {
+        id: '123',
+        tipo: 'reclamo',
+        nombreCliente: 'Juan Pérez',
+        email: 'juan@example.com',
+        telefono: '987654321',
+        prioridad: 'alta',
+        descripcion: 'Descripción del reclamo',
+        fechaRegistro: '2025-11-19 10:30:00'
+      }
+
+      const mockResponse = {
+        data: {
+          success: true,
+          message: 'Correo enviado exitosamente'
+        }
+      }
+
+      vi.mocked(correoApi.post).mockResolvedValue(mockResponse)
+
+      const resultado = await correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+
+      expect(resultado.success).toBe(true)
+      expect(correoApi.post).toHaveBeenCalledWith(
+        '/enviar',
+        expect.objectContaining({
+          destinatario: 'juan@example.com',
+          asunto: 'Requerimiento #123 - Reclamo',
+          requerimientoId: '123'
+        })
+      )
+    })
+
+    it('debe usar el email del requerimiento si no se proporciona destinatario', async () => {
+      const mockRequerimiento = {
+        id: '123',
+        tipo: 'consulta',
+        nombreCliente: 'María García',
+        email: 'maria@example.com',
+        telefono: '987654321',
+        prioridad: 'media',
+        descripcion: 'Consulta sobre póliza'
+      }
+
+      const mockResponse = {
+        data: {
+          success: true
+        }
+      }
+
+      vi.mocked(correoApi.post).mockResolvedValue(mockResponse)
+
+      await correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+
+      expect(correoApi.post).toHaveBeenCalledWith(
+        '/enviar',
+        expect.objectContaining({
+          destinatario: 'maria@example.com'
+        })
+      )
+    })
+
+    it('debe usar un email destino alternativo si se proporciona', async () => {
+      const mockRequerimiento = {
+        id: '123',
+        tipo: 'reclamo',
+        nombreCliente: 'Juan Pérez',
+        email: 'juan@example.com',
+        telefono: '987654321',
+        prioridad: 'alta',
+        descripcion: 'Reclamo importante'
+      }
+
+      const mockResponse = {
+        data: {
+          success: true
+        }
+      }
+
+      vi.mocked(correoApi.post).mockResolvedValue(mockResponse)
+
+      await correoService.enviarRequerimientoPorCorreo(mockRequerimiento, 'otro@example.com')
+
+      expect(correoApi.post).toHaveBeenCalledWith(
+        '/enviar',
+        expect.objectContaining({
+          destinatario: 'otro@example.com'
+        })
+      )
+    })
+
+    it('debe rechazar requerimiento sin ID', async () => {
+      const mockRequerimiento = {
+        tipo: 'reclamo',
+        nombreCliente: 'Juan Pérez',
+        email: 'juan@example.com'
+      }
+
+      await expect(
+        correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+      ).rejects.toThrow('El requerimiento debe tener un ID')
+    })
+
+    it('debe rechazar si no hay email disponible', async () => {
+      const mockRequerimiento = {
+        id: '123',
+        tipo: 'reclamo',
+        nombreCliente: 'Juan Pérez'
+      }
+
+      await expect(
+        correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+      ).rejects.toThrow('El email es requerido')
+    })
+
+    it('debe rechazar email con formato inválido', async () => {
+      const mockRequerimiento = {
+        id: '123',
+        tipo: 'reclamo',
+        nombreCliente: 'Juan Pérez',
+        email: 'email-invalido'
+      }
+
+      await expect(
+        correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+      ).rejects.toThrow('El email no tiene un formato válido')
+    })
+  })
+
+  describe('validarEmail', () => {
+    it('debe validar email correcto', () => {
+      expect(() => {
+        correoService.validarEmail('usuario@example.com')
+      }).not.toThrow()
+    })
+
+    it('debe rechazar email vacío', () => {
+      expect(() => {
+        correoService.validarEmail('')
+      }).toThrow('El email es requerido')
+    })
+
+    it('debe rechazar email con formato inválido', () => {
+      expect(() => {
+        correoService.validarEmail('email-invalido')
+      }).toThrow('El email no tiene un formato válido')
+    })
+
+    it('debe rechazar email sin dominio', () => {
+      expect(() => {
+        correoService.validarEmail('usuario@')
+      }).toThrow('El email no tiene un formato válido')
+    })
+  })
+})
+
