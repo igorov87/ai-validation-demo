@@ -2,7 +2,9 @@
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
       <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <h2 class="text-2xl font-bold text-gray-800">Nuevo Requerimiento</h2>
+        <h2 class="text-2xl font-bold text-gray-800">
+          {{ modoEdicion ? 'Editar Requerimiento' : 'Nuevo Requerimiento' }}
+        </h2>
         <button
           @click="$emit('cerrar')"
           class="text-gray-500 hover:text-gray-700 text-2xl font-bold"
@@ -168,7 +170,7 @@
             type="submit"
             class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-200"
           >
-            Guardar Requerimiento
+            Guardar
           </button>
         </div>
       </form>
@@ -177,12 +179,20 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, watch, computed } from 'vue'
 
 export default {
   name: 'RegistroRequerimiento',
-  emits: ['cerrar', 'guardar'],
+  props: {
+    requerimientoEditar: {
+      type: Object,
+      default: null
+    }
+  },
+  emits: ['cerrar', 'guardar', 'actualizar'],
   setup(props, { emit }) {
+    const modoEdicion = computed(() => props.requerimientoEditar !== null)
+
     const formulario = ref({
       tipo: '',
       nombreCliente: '',
@@ -196,30 +206,62 @@ export default {
       observaciones: ''
     })
 
+    // Cargar datos si estamos en modo edición
+    watch(
+      () => props.requerimientoEditar,
+      (nuevoRequerimiento) => {
+        if (nuevoRequerimiento) {
+          formulario.value = {
+            tipo: nuevoRequerimiento.tipo || '',
+            nombreCliente: nuevoRequerimiento.nombreCliente || '',
+            numeroPoliza: nuevoRequerimiento.numeroPoliza || '',
+            telefono: nuevoRequerimiento.telefono || '',
+            email: nuevoRequerimiento.email || '',
+            tipoSiniestro: nuevoRequerimiento.tipoSiniestro || '',
+            tipoSolicitud: nuevoRequerimiento.tipoSolicitud || '',
+            prioridad: nuevoRequerimiento.prioridad || 'media',
+            descripcion: nuevoRequerimiento.descripcion || '',
+            observaciones: nuevoRequerimiento.observaciones || ''
+          }
+        }
+      },
+      { immediate: true }
+    )
+
     const resetearCamposEspecificos = () => {
       formulario.value.tipoSiniestro = ''
       formulario.value.tipoSolicitud = ''
     }
 
     const guardar = () => {
-      emit('guardar', { ...formulario.value })
-      // Resetear formulario
-      formulario.value = {
-        tipo: '',
-        nombreCliente: '',
-        numeroPoliza: '',
-        telefono: '',
-        email: '',
-        tipoSiniestro: '',
-        tipoSolicitud: '',
-        prioridad: 'media',
-        descripcion: '',
-        observaciones: ''
+      if (modoEdicion.value) {
+        // Modo edición: emitir evento actualizar con ID
+        emit('actualizar', props.requerimientoEditar.id, { ...formulario.value })
+      } else {
+        // Modo creación: emitir evento guardar
+        emit('guardar', { ...formulario.value })
+      }
+      
+      // Resetear formulario solo en modo creación
+      if (!modoEdicion.value) {
+        formulario.value = {
+          tipo: '',
+          nombreCliente: '',
+          numeroPoliza: '',
+          telefono: '',
+          email: '',
+          tipoSiniestro: '',
+          tipoSolicitud: '',
+          prioridad: 'media',
+          descripcion: '',
+          observaciones: ''
+        }
       }
     }
 
     return {
       formulario,
+      modoEdicion,
       resetearCamposEspecificos,
       guardar
     }

@@ -1,0 +1,706 @@
+---
+alwaysApply: true
+---
+# Proyecto {{name}}
+
+Sistema de Registro de Requerimientos desarrollado con Vue.js 3 y JavaScript. Es una aplicación frontend que sigue una arquitectura en capas para facilitar el mantenimiento y la escalabilidad.
+
+## Estructura del Proyecto
+
+```
+ai-validation-demo/
+│
+├── src/                          # Código fuente de la aplicación
+│   ├── api/                      # Instancias axios para APIs externas
+│   │   └── requerimientos.js     # Instancia axios configurada
+│   │
+│   ├── components/               # Componentes Vue reutilizables
+│   │   ├── ListaRequerimientos.vue
+│   │   └── RegistroRequerimiento.vue
+│   │
+│   ├── composables/              # Lógica reactiva reutilizable
+│   │   └── useRequerimiento.js   # Composable con lógica de requerimientos
+│   │
+│   ├── services/                 # Lógica de negocio y llamadas a APIs
+│   │   └── requerimiento.service.js
+│   │
+│   ├── config.js                 # Variables de entorno centralizadas
+│   │
+│   ├── App.vue                   # Componente raíz de la aplicación
+│   ├── main.js                   # Punto de entrada JavaScript
+│   └── style.css                 # Estilos globales + Tailwind
+│
+├── .env.development              # Variables de entorno - desarrollo
+├── .env.production               # Variables de entorno - producción
+│
+├── vite.config.js               # Configuración de Vite
+├── tailwind.config.js           # Configuración de Tailwind CSS
+├── postcss.config.js            # Configuración de PostCSS
+│
+├── package.json                 # Dependencias y scripts npm
+├── package-lock.json            # Lock de versiones exactas
+│
+└── README.md                    # Documentación básica
+```
+
+# Lineamientos de Arquitectura
+
+## Arquitectura en Capas
+
+El proyecto sigue una arquitectura en capas donde cada capa tiene una responsabilidad única:
+
+```
+Componentes Vue → Composables → Services → API (axios) → Backend
+```
+
+1. **Componentes Vue**: Capa de presentación, maneja la UI y eventos del usuario
+2. **Composables**: Lógica reactiva reutilizable, estado local y comunicación con servicios
+3. **Services**: Lógica de negocio, validaciones y transformación de datos
+4. **API (axios)**: Comunicación HTTP, configuración de headers, interceptors y manejo de errores
+
+## Composables
+
+Los composables son funciones reactivas que encapsulan lógica reutilizable. Deben seguir estos principios:
+
+- Usar `ref`, `reactive`, `computed` para manejar estado reactivo
+- Comunicarse con servicios para obtener datos
+- Retornar objetos con propiedades y métodos reactivos
+- Manejar estados de carga (loading) y errores
+
+**Ejemplo de composable para requerimientos:**
+
+```javascript
+import { ref } from 'vue'
+import { requerimientoService } from '@/services/requerimiento.service'
+
+export const useRequerimiento = () => {
+  const requerimientos = ref([])
+  const loading = ref(false)
+  const error = ref(null)
+
+  const listarRequerimientos = async () => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await requerimientoService.obtenerRequerimientos()
+      requerimientos.value = response.data
+      console.log(`✅ ${response.data.length} requerimientos cargados`)
+    } catch (err) {
+      error.value = err.message || 'Error al cargar requerimientos'
+      console.error('Error al listar requerimientos:', err)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const crearRequerimiento = async (data) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const nuevoRequerimiento = await requerimientoService.crearRequerimiento(data)
+      requerimientos.value.unshift(nuevoRequerimiento)
+      console.log('✅ Requerimiento creado exitosamente')
+      return nuevoRequerimiento
+    } catch (err) {
+      error.value = err.message || 'Error al crear requerimiento'
+      console.error('Error al crear requerimiento:', err)
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const eliminarRequerimiento = async (id) => {
+    loading.value = true
+    try {
+      await requerimientoService.eliminarRequerimiento(id)
+      requerimientos.value = requerimientos.value.filter(req => req.id !== id)
+      console.log('✅ Requerimiento eliminado')
+      return true
+    } catch (err) {
+      error.value = err.message
+      console.error('Error al eliminar requerimiento:', err)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    // Estado
+    requerimientos,
+    loading,
+    error,
+    
+    // Métodos
+    listarRequerimientos,
+    crearRequerimiento,
+    eliminarRequerimiento
+  }
+}
+```
+
+## Servicios
+
+Los servicios contienen la lógica de negocio y abstraen las llamadas a APIs. Deben estar ubicados en `src/services/`.
+
+**Responsabilidades de un servicio:**
+- Realizar llamadas HTTP a través de la capa API
+- Validar datos antes de enviarlos al backend
+- Transformar y normalizar respuestas de la API
+- Manejar lógica de negocio compleja
+
+**Ejemplo de servicio para requerimientos:**
+
+```javascript
+import requerimientosApi from '@/api/requerimientos'
+
+/**
+ * Servicio de Requerimientos
+ * Contiene toda la lógica de negocio relacionada con requerimientos
+ */
+
+const obtenerRequerimientos = async (filtros = {}) => {
+  const response = await requerimientosApi.get('/requerimientos', {
+    params: filtros
+  })
+  return response.data
+}
+
+const obtenerRequerimientoPorId = async (id) => {
+  const response = await requerimientosApi.get(`/requerimientos/${id}`)
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Error al obtener requerimiento')
+  }
+  
+  return response.data.data
+}
+
+const crearRequerimiento = async (data) => {
+  // Validaciones de negocio antes de enviar
+  validarRequerimiento(data)
+  
+  const response = await requerimientosApi.post('/requerimientos', data)
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Error al crear requerimiento')
+  }
+  
+  console.log('✅ Requerimiento creado en el servidor:', response.data.data.id)
+  return response.data.data
+}
+
+const actualizarRequerimiento = async (id, data) => {
+  const response = await requerimientosApi.put(`/requerimientos/${id}`, data)
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Error al actualizar requerimiento')
+  }
+  
+  return response.data.data
+}
+
+const eliminarRequerimiento = async (id) => {
+  const response = await requerimientosApi.delete(`/requerimientos/${id}`)
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Error al eliminar requerimiento')
+  }
+}
+
+// Validaciones de negocio
+const validarRequerimiento = (data) => {
+  if (!data.nombreCliente || data.nombreCliente.trim().length < 3) {
+    throw new Error('El nombre del cliente debe tener al menos 3 caracteres')
+  }
+  
+  if (!data.telefono || !/^\d{9,}$/.test(data.telefono)) {
+    throw new Error('El teléfono debe tener al menos 9 dígitos')
+  }
+  
+  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+    throw new Error('El email no tiene un formato válido')
+  }
+  
+  if (!data.descripcion || data.descripcion.trim().length < 10) {
+    throw new Error('La descripción debe tener al menos 10 caracteres')
+  }
+}
+
+export const requerimientoService = {
+  obtenerRequerimientos,
+  obtenerRequerimientoPorId,
+  crearRequerimiento,
+  actualizarRequerimiento,
+  eliminarRequerimiento
+}
+```
+
+## Capa API - Integraciones con APIs externas
+
+- Se debe usar la biblioteca `axios` para todas las comunicaciones con APIs externas
+- Cada módulo debe tener su propia instancia de axios en `src/api/` con configuración específica
+- La URL base debe estar configurada en `src/config.js` usando variables de entorno de Vite
+- Los interceptors manejan autenticación, logging y errores globales
+
+**Ejemplo de instancia axios (`src/api/requerimientos.js`):**
+
+```javascript
+import axios from 'axios'
+import config from '@/config'
+
+// Crear instancia de axios con configuración base
+const requerimientosApi = axios.create({
+  baseURL: config.API_REQUERIMIENTOS_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Interceptor de REQUEST
+requerimientosApi.interceptors.request.use(
+  (config) => {
+    // Agregar token de autenticación si existe
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+
+    // Agregar headers personalizados
+    config.headers['X-Application-Name'] = 'requerimientos-frontend'
+
+    // Log de petición en desarrollo
+    if (import.meta.env.DEV) {
+      console.log(`🚀 [API Request] ${config.method?.toUpperCase()} ${config.url}`)
+    }
+
+    // Verificar conectividad
+    if (!navigator.onLine) {
+      console.warn('⚠️ Navegador sin conexión a internet')
+    }
+
+    return config
+  },
+  (error) => {
+    console.error('❌ Error en request interceptor:', error)
+    return Promise.reject(error)
+  }
+)
+
+// Interceptor de RESPONSE
+requerimientosApi.interceptors.response.use(
+  (response) => {
+    // Log de respuesta exitosa en desarrollo
+    if (import.meta.env.DEV) {
+      console.log(`✅ [API Response] ${response.status}`, response.data)
+    }
+    return response
+  },
+  (error) => {
+    // Manejo de errores HTTP
+    if (error.response) {
+      const status = error.response.status
+      const message = error.response.data?.message || error.message
+
+      console.error(`❌ [API Error ${status}]`, message)
+
+      // Manejo específico por código de error
+      switch (status) {
+        case 401:
+          // Sesión expirada
+          localStorage.clear()
+          window.location.href = '/login?error=sesion-expirada'
+          break
+        
+        case 403:
+          console.warn('⚠️ Acceso denegado')
+          break
+        
+        case 404:
+          console.warn('⚠️ Recurso no encontrado')
+          break
+        
+        case 500:
+        case 502:
+        case 503:
+          console.error('🔥 Error del servidor')
+          break
+      }
+    } else if (error.request) {
+      // La petición se hizo pero no hubo respuesta
+      console.error('❌ No se recibió respuesta del servidor')
+    } else {
+      // Error en la configuración
+      console.error('❌ Error al configurar la petición:', error.message)
+    }
+
+    return Promise.reject(error)
+  }
+)
+
+export default requerimientosApi
+```
+
+## Configuración de Variables de Entorno
+
+- Las variables de entorno se configuran en archivos `.env.*` en la raíz del proyecto
+- En Vite, las variables deben tener el prefijo `VITE_` para ser expuestas al cliente
+- Centralizar todas las variables en `src/config.js` para fácil acceso
+
+**Archivo `.env.development`:**
+```env
+# API URLs
+VITE_API_REQUERIMIENTOS_URL=http://localhost:3000/api
+
+# App Config
+VITE_APP_NAME=Sistema de Requerimientos - DEV
+
+# Features
+VITE_ENABLE_LOGS=true
+```
+
+**Archivo `.env.production`:**
+```env
+# API URLs
+VITE_API_REQUERIMIENTOS_URL=https://api.empresa.com/requerimientos
+
+# App Config
+VITE_APP_NAME=Sistema de Requerimientos
+
+# Features
+VITE_ENABLE_LOGS=false
+```
+
+**Archivo `src/config.js`:**
+```javascript
+/**
+ * Configuración centralizada de la aplicación
+ * Todas las variables de entorno deben estar aquí
+ */
+export default {
+  // URLs de APIs
+  API_REQUERIMIENTOS_URL: import.meta.env.VITE_API_REQUERIMIENTOS_URL || 'http://localhost:3000/api',
+  
+  // Configuración de la aplicación
+  APP_NAME: import.meta.env.VITE_APP_NAME || 'Sistema de Requerimientos',
+  APP_ENV: import.meta.env.MODE || 'development',
+  
+  // Features flags
+  ENABLE_LOGS: import.meta.env.VITE_ENABLE_LOGS === 'true',
+  
+  // Timeouts
+  API_TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000')
+}
+```
+
+**Uso en el código:**
+```javascript
+import config from '@/config'
+
+console.log(`Conectando a: ${config.API_REQUERIMIENTOS_URL}`)
+document.title = config.APP_NAME
+```
+
+## Registro de Logs
+
+Usar los métodos de consola apropiados para cada tipo de evento:
+
+- `console.log()` - Eventos importantes e informativos con contexto
+- `console.error()` - Errores con el objeto de error completo
+- `console.warn()` - Advertencias y situaciones que requieren atención
+
+**Ejemplo de logging en operaciones:**
+```javascript
+try {
+  const response = await requerimientoService.obtenerRequerimientos()
+  console.log(`✅ ${response.data.length} requerimientos cargados exitosamente`)
+  requerimientos.value = response.data
+} catch (error) {
+  console.error('❌ Error al cargar requerimientos:', error)
+  throw error
+}
+```
+
+**Logging en desarrollo vs producción:**
+```javascript
+import config from '@/config'
+
+// Solo mostrar logs detallados en desarrollo
+if (config.ENABLE_LOGS) {
+  console.log('🔍 Datos procesados:', data)
+}
+```
+
+## Componentes Vue
+
+Los componentes deben seguir estas mejores prácticas:
+
+- Usar Composition API con `<script setup>`
+- Extraer lógica compleja a composables
+- Mantener componentes pequeños con una sola responsabilidad
+- Usar props tipadas y eventos bien definidos
+
+**Ejemplo de componente que consume un composable:**
+
+```vue
+<script setup>
+import { onMounted } from 'vue'
+import { useRequerimiento } from '@/composables/useRequerimiento'
+import ListaRequerimientos from '@/components/ListaRequerimientos.vue'
+
+// Composable con toda la lógica
+const {
+  requerimientos,
+  loading,
+  error,
+  listarRequerimientos,
+  eliminarRequerimiento
+} = useRequerimiento()
+
+// Cargar datos al montar
+onMounted(async () => {
+  await listarRequerimientos()
+})
+
+// Handler para eliminar
+const handleEliminar = async (id) => {
+  if (confirm('¿Está seguro de eliminar este requerimiento?')) {
+    await eliminarRequerimiento(id)
+  }
+}
+</script>
+
+<template>
+  <div class="container mx-auto px-4 py-8">
+    <!-- Loading state -->
+    <div v-if="loading" class="text-center">
+      <p>Cargando requerimientos...</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="error" class="bg-red-50 p-4 rounded">
+      <p class="text-red-600">{{ error }}</p>
+    </div>
+
+    <!-- Lista de requerimientos -->
+    <ListaRequerimientos
+      v-else
+      :requerimientos="requerimientos"
+      @eliminar="handleEliminar"
+    />
+  </div>
+</template>
+```
+
+**Componente hijo con props y eventos:**
+
+```vue
+<script setup>
+defineProps({
+  requerimientos: {
+    type: Array,
+    required: true
+  }
+})
+
+const emit = defineEmits(['eliminar'])
+</script>
+
+<template>
+  <div class="grid gap-4">
+    <div
+      v-for="req in requerimientos"
+      :key="req.id"
+      class="bg-white p-4 rounded shadow"
+    >
+      <h3>{{ req.nombreCliente }}</h3>
+      <p>{{ req.descripcion }}</p>
+      <button @click="emit('eliminar', req.id)">
+        Eliminar
+      </button>
+    </div>
+  </div>
+</template>
+```
+
+## Pruebas Unitarias
+
+- Las pruebas deben estar en la carpeta `tests/unit/`
+- Usar Vitest como framework de testing (compatible con Vite)
+- Cubrir composables, servicios y componentes críticos
+- Las pruebas deben ser reproducibles en CI/CD
+
+**Ejemplo de prueba para composable:**
+
+```javascript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useRequerimiento } from '@/composables/useRequerimiento'
+import { requerimientoService } from '@/services/requerimiento.service'
+
+// Mock del servicio
+vi.mock('@/services/requerimiento.service', () => ({
+  requerimientoService: {
+    obtenerRequerimientos: vi.fn(),
+    crearRequerimiento: vi.fn()
+  }
+}))
+
+describe('useRequerimiento', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('debe inicializar con valores por defecto', () => {
+    const { requerimientos, loading, error } = useRequerimiento()
+    
+    expect(requerimientos.value).toEqual([])
+    expect(loading.value).toBe(false)
+    expect(error.value).toBeNull()
+  })
+
+  it('debe cargar requerimientos exitosamente', async () => {
+    const mockData = {
+      data: [
+        { id: '1', nombreCliente: 'Cliente 1', tipo: 'reclamo' },
+        { id: '2', nombreCliente: 'Cliente 2', tipo: 'consulta' }
+      ]
+    }
+
+    vi.mocked(requerimientoService.obtenerRequerimientos).mockResolvedValue(mockData)
+
+    const { requerimientos, listarRequerimientos } = useRequerimiento()
+    await listarRequerimientos()
+
+    expect(requerimientos.value).toHaveLength(2)
+    expect(requerimientos.value[0].id).toBe('1')
+  })
+
+  it('debe manejar errores al cargar', async () => {
+    vi.mocked(requerimientoService.obtenerRequerimientos).mockRejectedValue(
+      new Error('Error de conexión')
+    )
+
+    const { error, listarRequerimientos } = useRequerimiento()
+    await listarRequerimientos()
+
+    expect(error.value).toBeTruthy()
+  })
+})
+```
+
+**Ejemplo de prueba para servicio:**
+
+```javascript
+import { describe, it, expect, vi } from 'vitest'
+import { requerimientoService } from '@/services/requerimiento.service'
+import requerimientosApi from '@/api/requerimientos'
+
+vi.mock('@/api/requerimientos')
+
+describe('requerimientoService', () => {
+  it('debe crear un requerimiento con validación', async () => {
+    const mockRequest = {
+      tipo: 'reclamo',
+      nombreCliente: 'Juan Pérez',
+      telefono: '987654321',
+      prioridad: 'alta',
+      descripcion: 'Descripción del reclamo de prueba'
+    }
+
+    const mockResponse = {
+      data: {
+        success: true,
+        data: { id: '123', ...mockRequest }
+      }
+    }
+
+    vi.mocked(requerimientosApi.post).mockResolvedValue(mockResponse)
+
+    const resultado = await requerimientoService.crearRequerimiento(mockRequest)
+
+    expect(resultado.id).toBe('123')
+    expect(requerimientosApi.post).toHaveBeenCalledWith('/requerimientos', mockRequest)
+  })
+
+  it('debe rechazar datos inválidos', async () => {
+    const datosInvalidos = {
+      tipo: 'reclamo',
+      nombreCliente: 'AB', // Muy corto
+      telefono: '123', // Muy corto
+      prioridad: 'alta',
+      descripcion: 'Corto' // Muy corto
+    }
+
+    await expect(
+      requerimientoService.crearRequerimiento(datosInvalidos)
+    ).rejects.toThrow()
+  })
+})
+```
+
+---
+
+## Flujo de Trabajo Completo
+
+**1. Usuario interactúa con el componente:**
+```
+Usuario hace clic en "Crear Requerimiento"
+```
+
+**2. Componente llama al composable:**
+```javascript
+const { crearRequerimiento } = useRequerimiento()
+await crearRequerimiento(formData)
+```
+
+**3. Composable llama al servicio:**
+```javascript
+const nuevoReq = await requerimientoService.crearRequerimiento(data)
+```
+
+**4. Servicio valida y llama a la API:**
+```javascript
+validarRequerimiento(data) // Validaciones de negocio
+const response = await requerimientosApi.post('/requerimientos', data)
+```
+
+**5. Axios interceptor agrega headers:**
+```javascript
+config.headers.Authorization = `Bearer ${token}`
+```
+
+**6. Backend procesa y responde:**
+```javascript
+{ success: true, data: { id: '123', ... } }
+```
+
+**7. Servicio retorna al composable:**
+```javascript
+return response.data.data
+```
+
+**8. Composable actualiza estado reactivo:**
+```javascript
+requerimientos.value.unshift(nuevoReq)
+```
+
+**9. Vue re-renderiza automáticamente:**
+```
+La UI se actualiza mostrando el nuevo requerimiento
+```
+
+---
+
+## Mejores Prácticas
+
+✅ **Separación de Responsabilidades**: Cada capa tiene una función específica
+✅ **Reutilización**: Composables y servicios compartidos entre componentes
+✅ **Manejo de Errores**: Try-catch en cada capa con logs apropiados
+✅ **Loading States**: Indicadores de carga para mejor UX
+✅ **Validaciones**: En servicios antes de enviar al backend
+✅ **Configuración Centralizada**: Variables de entorno en `config.js`
+✅ **Logs Estructurados**: Uso de emojis y contexto para fácil debugging
