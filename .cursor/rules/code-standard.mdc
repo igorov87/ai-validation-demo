@@ -1,0 +1,414 @@
+---
+alwaysApply: true
+---
+# Estándares de Código
+
+## Nomenclatura OBLIGATORIA
+
+- **Variables y funciones**: camelCase (ej: `nombreCliente`, `crearRequerimiento`)
+- **Constantes**: UPPER_SNAKE_CASE (ej: `API_TIMEOUT`, `MAX_FILE_SIZE`)
+- **Archivos**: kebab-case (ej: `requerimiento.service.js`, `use-requerimiento.js`)
+- **Componentes Vue**: PascalCase (ej: `RegistroRequerimiento.vue`)
+
+## Límites de Código OBLIGATORIOS
+
+- **Funciones**: máximo 50 líneas
+- **Archivos de servicios**: máximo 300 líneas (separar si crece más)
+- **Componentes Vue**: máximo 250 líneas (extraer a sub-componentes si crece más)
+
+## Organización de Imports
+RECOMENDACIÓN - Orden en los imports:
+
+```javascript
+// 1. Framework Vue
+import { ref, computed, onMounted } from 'vue'
+
+// 2. Dependencias externas (librerías)
+import axios from 'axios'
+import validator from 'validator'
+
+// 3. Composables
+import { useRequerimiento } from '@/composables/useRequerimiento'
+
+// 4. Servicios
+import { requerimientoService } from '@/services/requerimiento.service'
+
+// 5. Componentes
+import ListaRequerimientos from '@/components/ListaRequerimientos.vue'
+
+// 6. Config y utilidades
+import config from '@/config'
+
+// 7. Estilos (si aplica)
+import '@/assets/styles/custom.css'
+```
+
+## Early Returns Obligatorio
+OBLIGATORIO - Early returns para validaciones
+
+```javascript
+// ✅ CORRECTO - Validaciones al inicio con early returns
+const crearRequerimiento = async (data) => {
+  // Validación 1
+  if (!data.nombreCliente) {
+    throw new Error('Nombre del cliente es requerido')
+  }
+
+  // Validación 2
+  if (data.nombreCliente.length < 3) {
+    throw new Error('Nombre debe tener al menos 3 caracteres')
+  }
+
+  // Validación 3
+  if (!data.telefono || !/^\d{9,}$/.test(data.telefono)) {
+    throw new Error('Teléfono inválido')
+  }
+
+  // Lógica principal al final
+  const requerimiento = await requerimientoService.crearRequerimiento(data)
+  console.log('✅ Requerimiento creado:', requerimiento.id)
+  return requerimiento
+}
+
+// ❌ INCORRECTO - Anidamiento excesivo
+const crearRequerimientoMal = async (data) => {
+  if (data.nombreCliente) {
+    if (data.nombreCliente.length >= 3) {
+      if (data.telefono && /^\d{9,}$/.test(data.telefono)) {
+        // Lógica principal anidada (difícil de leer)
+        return await requerimientoService.crearRequerimiento(data)
+      }
+    }
+  }
+}
+```
+
+## JavaScript Moderno
+
+Usar características modernas de JavaScript:
+
+- **Optional chaining**: `requerimiento?.cliente?.email`
+- **Nullish coalescing**: `const nombre = data.nombre ?? 'Sin nombre'`
+- **Destructuring**: Extraer propiedades de objetos y arrays
+- **Template literals**: Para strings compuestos
+- **Arrow functions**: Para funciones cortas
+- **Async/await**: En lugar de callbacks o .then()
+
+```javascript
+// ✅ CORRECTO - JavaScript moderno
+const procesarRequerimiento = async (id) => {
+  const requerimiento = await requerimientoService.obtenerPorId(id)
+  
+  const nombreCliente = requerimiento?.nombreCliente ?? 'Anónimo'
+  const { tipo, prioridad, descripcion } = requerimiento
+  
+  console.log(`Procesando ${tipo} de ${nombreCliente}`)
+  
+  return { tipo, prioridad, descripcion }
+}
+
+// ❌ INCORRECTO - Código antiguo
+function procesarRequerimientoViejo(id, callback) {
+  requerimientoService.obtenerPorId(id).then(function(req) {
+    var nombre = req.nombreCliente ? req.nombreCliente : 'Anónimo'
+    callback(null, req)
+  }).catch(function(error) {
+    callback(error)
+  })
+}
+```
+
+## Single Responsibility Principle
+
+Una responsabilidad por función/servicio:
+
+```javascript
+// ✅ CORRECTO - Separación de responsabilidades
+
+// Servicio: Solo lógica de API y validaciones
+export const requerimientoService = {
+  obtenerRequerimientos: async () => { /* ... */ },
+  crearRequerimiento: async (data) => { /* ... */ },
+  validarDatos: (data) => { /* ... */ }
+}
+
+// Composable: Solo lógica reactiva
+export const useRequerimiento = () => {
+  const requerimientos = ref([])
+  const loading = ref(false)
+  
+  const listar = async () => { /* usa el servicio */ }
+  const crear = async (data) => { /* usa el servicio */ }
+  
+  return { requerimientos, loading, listar, crear }
+}
+
+// ❌ INCORRECTO - Múltiples responsabilidades
+export const requerimientoMegaService = {
+  obtenerDatos() { },      // API
+  validar() { },           // Validación
+  formatear() { },         // Formato
+  renderizar() { },        // UI (no debería estar aquí)
+  enviarEmail() { }        // Notificación (debería ser otro servicio)
+}
+```
+
+## Manejo de Arrays y Objetos
+
+Usar programación funcional y características modernas:
+
+```javascript
+// ✅ CORRECTO - Destructuring y métodos funcionales
+const procesarRequerimientos = (requerimientos) => {
+  // Destructuring
+  const [primero, segundo, ...resto] = requerimientos
+  
+  // Filter + Map
+  const urgentes = requerimientos
+    .filter(req => req.prioridad === 'urgente')
+    .map(req => ({
+      id: req.id,
+      cliente: req.nombreCliente,
+      tipo: req.tipo
+    }))
+  
+  // Reduce para totales
+  const totalPorTipo = requerimientos.reduce((acc, req) => {
+    acc[req.tipo] = (acc[req.tipo] || 0) + 1
+    return acc
+  }, {})
+  
+  return { urgentes, totalPorTipo }
+}
+
+// ✅ CORRECTO - Template literals
+const generarMensaje = (requerimiento) => {
+  const { nombreCliente, tipo, prioridad } = requerimiento
+  return `Requerimiento tipo ${tipo} de ${nombreCliente} con prioridad ${prioridad}`
+}
+
+// ❌ INCORRECTO - Loops y concatenación
+const procesarRequerimientosMal = (requerimientos) => {
+  var urgentes = []
+  for (var i = 0; i < requerimientos.length; i++) {
+    if (requerimientos[i].prioridad === 'urgente') {
+      urgentes.push(requerimientos[i])
+    }
+  }
+  return urgentes
+}
+
+// ❌ INCORRECTO - Concatenación de strings
+const mensaje = 'Requerimiento tipo ' + tipo + ' de ' + cliente
+```
+
+## Const por Defecto
+
+Usar `const` por defecto, `let` solo cuando el valor cambie:
+
+```javascript
+// ✅ CORRECTO
+const API_URL = config.API_REQUERIMIENTOS_URL  // No cambia
+const requerimientos = ref([])                  // La referencia no cambia
+let contador = 0                                // Valor que cambia
+
+const incrementar = () => {
+  contador++  // OK porque usamos let
+}
+
+// ❌ INCORRECTO
+let API_URL = config.API_REQUERIMIENTOS_URL    // Debería ser const
+var requerimientos = ref([])                    // Nunca usar var
+```
+
+## JSDoc para Funciones Públicas
+
+RECOMENDACIÓN - Documentar funciones públicas exportadas:
+
+```javascript
+/**
+ * Crea un nuevo requerimiento en el sistema
+ * 
+ * @param {Object} requerimientoData - Datos del requerimiento a crear
+ * @param {string} requerimientoData.nombreCliente - Nombre completo del cliente
+ * @param {string} requerimientoData.tipo - Tipo: 'reclamo', 'consulta', 'solicitud', 'queja', 'sugerencia'
+ * @param {string} requerimientoData.prioridad - Prioridad: 'baja', 'media', 'alta', 'urgente'
+ * @param {string} requerimientoData.descripcion - Descripción detallada del requerimiento
+ * @returns {Promise<Object>} Requerimiento creado con su ID
+ * @throws {Error} Si los datos son inválidos o falla la creación
+ * 
+ * @example
+ * const nuevoReq = await crearRequerimiento({
+ *   nombreCliente: 'Juan Pérez',
+ *   tipo: 'reclamo',
+ *   prioridad: 'alta',
+ *   descripcion: 'Problema con la póliza'
+ * })
+ */
+export const crearRequerimiento = async (requerimientoData) => {
+  // Validaciones
+  if (!requerimientoData.nombreCliente) {
+    throw new Error('Nombre del cliente es requerido')
+  }
+  
+  // Llamada a la API
+  const response = await requerimientosApi.post('/requerimientos', requerimientoData)
+  return response.data.data
+}
+```
+
+## Manejo de Errores
+
+OBLIGATORIO - Siempre manejar errores con try-catch y logs apropiados:
+
+```javascript
+// ✅ CORRECTO - Try-catch con logs y re-throw
+const listarRequerimientos = async () => {
+  loading.value = true
+  error.value = null
+  
+  try {
+    const response = await requerimientoService.obtenerRequerimientos()
+    requerimientos.value = response.data
+    console.log(`✅ ${response.data.length} requerimientos cargados`)
+  } catch (err) {
+    error.value = err.message || 'Error al cargar requerimientos'
+    console.error('❌ Error al listar requerimientos:', err)
+    throw err  // Re-throw para que el componente lo maneje
+  } finally {
+    loading.value = false
+  }
+}
+
+// ❌ INCORRECTO - Silenciar errores
+const listarRequerimientosMal = async () => {
+  try {
+    const response = await requerimientoService.obtenerRequerimientos()
+    requerimientos.value = response.data
+  } catch (err) {
+    // Error silenciado - muy malo!
+  }
+}
+```
+
+## Formato de Código
+
+OBLIGATORIO - Usar formato consistente:
+
+- **Punto y coma**: Opcional pero ser consistente (elegir usarlos o no)
+- **Comillas**: Usar comillas simples `'...'` por defecto
+- **Indentación**: 2 espacios (configurar en editor)
+- **Espaciado**: Espacio después de comas, alrededor de operadores
+
+```javascript
+// ✅ CORRECTO - Formato consistente
+const crearRequerimiento = async (data) => {
+  const { nombreCliente, tipo, prioridad } = data
+  
+  if (!nombreCliente) {
+    throw new Error('Nombre requerido')
+  }
+  
+  const resultado = await requerimientoService.crear({
+    nombreCliente,
+    tipo,
+    prioridad
+  })
+  
+  return resultado
+}
+
+// ❌ INCORRECTO - Formato inconsistente
+const crearRequerimiento=async(data)=>{
+const {nombreCliente,tipo,prioridad}=data
+if(!nombreCliente){throw new Error("Nombre requerido")}
+return await requerimientoService.crear({nombreCliente,tipo,prioridad})}
+```
+
+## Nombres Descriptivos
+
+Usar nombres que describan claramente el propósito:
+
+```javascript
+// ✅ CORRECTO - Nombres descriptivos
+const requerimientosUrgentes = requerimientos.filter(r => r.prioridad === 'urgente')
+const hayRequerimientosPendientes = requerimientos.some(r => r.estado === 'pendiente')
+const totalRequerimientos = requerimientos.length
+
+// ❌ INCORRECTO - Nombres crípticos
+const arr1 = requerimientos.filter(r => r.prioridad === 'urgente')
+const flag = requerimientos.some(r => r.estado === 'pendiente')
+const n = requerimientos.length
+```
+
+## Pruebas Unitarias
+
+OBLIGATORIO - Generar pruebas en la carpeta `tests/unit/`:
+
+```javascript
+// tests/unit/composables/useRequerimiento.spec.js
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useRequerimiento } from '@/composables/useRequerimiento'
+import { requerimientoService } from '@/services/requerimiento.service'
+
+// Mock del servicio
+vi.mock('@/services/requerimiento.service')
+
+describe('useRequerimiento', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('debe inicializar con valores por defecto', () => {
+    const { requerimientos, loading, error } = useRequerimiento()
+    
+    expect(requerimientos.value).toEqual([])
+    expect(loading.value).toBe(false)
+    expect(error.value).toBeNull()
+  })
+
+  it('debe crear un requerimiento exitosamente', async () => {
+    const mockData = {
+      tipo: 'reclamo',
+      nombreCliente: 'Juan Pérez',
+      telefono: '987654321',
+      prioridad: 'alta',
+      descripcion: 'Test'
+    }
+
+    const mockResponse = { id: '123', ...mockData }
+    vi.mocked(requerimientoService.crearRequerimiento).mockResolvedValue(mockResponse)
+
+    const { crearRequerimiento } = useRequerimiento()
+    const resultado = await crearRequerimiento(mockData)
+
+    expect(resultado.id).toBe('123')
+    expect(requerimientoService.crearRequerimiento).toHaveBeenCalledWith(mockData)
+  })
+})
+```
+
+---
+
+## Resumen de Mejores Prácticas
+
+✅ **DO (Hacer)**:
+- Usar nomenclatura consistente (camelCase, kebab-case)
+- Early returns para validaciones
+- Funciones pequeñas (< 50 líneas)
+- JavaScript moderno (async/await, destructuring, optional chaining)
+- Programación funcional (map, filter, reduce)
+- JSDoc en funciones públicas
+- Try-catch con logs apropiados
+- Const por defecto, let cuando sea necesario
+- Nombres descriptivos
+
+❌ **DON'T (No hacer)**:
+- Usar `var` (usar const/let)
+- Anidamiento excesivo (usar early returns)
+- Funciones gigantes (> 50 líneas)
+- Silenciar errores (sin try-catch o catch vacío)
+- Nombres crípticos (a, b, x, temp)
+- Múltiples responsabilidades en una función
+- Callbacks (usar async/await)
+- For loops (usar métodos de array)

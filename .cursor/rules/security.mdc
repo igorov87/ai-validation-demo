@@ -1,0 +1,667 @@
+---
+alwaysApply: true
+---
+# Seguridad Frontend - Sistema de Requerimientos
+
+## Validación OBLIGATORIA en Formularios
+
+SIEMPRE validar datos del usuario antes de enviarlos a la API.
+
+### Validación en Servicios
+
+```javascript
+/**
+ * Valida los datos de un requerimiento antes de crear
+ * @param {Object} data - Datos del requerimiento
+ * @returns {string[]} Array de errores (vacío si es válido)
+ */
+const validarRequerimiento = (data) => {
+  const errores = []
+
+  // Validar nombre del cliente
+  if (!data.nombreCliente || data.nombreCliente.trim().length < 3) {
+    errores.push('El nombre del cliente debe tener al menos 3 caracteres')
+  }
+
+  // Validar teléfono
+  if (!data.telefono) {
+    errores.push('El teléfono es requerido')
+  } else if (!/^\d{9,15}$/.test(data.telefono)) {
+    errores.push('El teléfono debe tener entre 9 y 15 dígitos')
+  }
+
+  // Validar email (opcional pero con formato)
+  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+    errores.push('El email no tiene un formato válido')
+  }
+
+  // Validar tipo de requerimiento
+  const tiposValidos = ['reclamo', 'solicitud', 'consulta', 'queja', 'sugerencia']
+  if (!tiposValidos.includes(data.tipo)) {
+    errores.push('Tipo de requerimiento inválido')
+  }
+
+  // Validar prioridad
+  const prioridadesValidas = ['baja', 'media', 'alta', 'urgente']
+  if (!prioridadesValidas.includes(data.prioridad)) {
+    errores.push('Prioridad inválida')
+  }
+
+  // Validar descripción
+  if (!data.descripcion || data.descripcion.trim().length < 10) {
+    errores.push('La descripción debe tener al menos 10 caracteres')
+  }
+
+  if (data.descripcion && data.descripcion.length > 5000) {
+    errores.push('La descripción no puede exceder 5000 caracteres')
+  }
+
+  // Validar número de póliza (opcional, solo alfanumérico)
+  if (data.numeroPoliza && !/^[A-Z0-9-]+$/i.test(data.numeroPoliza)) {
+    errores.push('El número de póliza solo puede contener letras, números y guiones')
+  }
+
+  // Validar observaciones (opcional)
+  if (data.observaciones && data.observaciones.length > 2000) {
+    errores.push('Las observaciones no pueden exceder 2000 caracteres')
+  }
+
+  return errores
+}
+
+// Ejemplo de uso en servicio
+const crearRequerimiento = async (data) => {
+  // Validar antes de enviar
+  const errores = validarRequerimiento(data)
+  if (errores.length > 0) {
+    throw new Error(`Validación fallida: ${errores.join(', ')}`)
+  }
+
+  // Sanitizar datos antes de enviar
+  const datosSanitizados = sanitizarRequerimiento(data)
+
+  const response = await requerimientosApi.post('/requerimientos', datosSanitizados)
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Error al crear requerimiento')
+  }
+
+  return response.data.data
+}
+```
+
+### Validación en Composables
+
+```javascript
+import { ref } from 'vue'
+import { requerimientoService } from '@/services/requerimiento.service'
+
+export const useRequerimiento = () => {
+  const erroresValidacion = ref([])
+  const loading = ref(false)
+
+  const crearRequerimiento = async (data) => {
+    erroresValidacion.value = []
+    loading.value = true
+
+    try {
+      // Validaciones previas en el composable
+      if (!data.nombreCliente || !data.telefono || !data.descripcion) {
+        erroresValidacion.value = ['Todos los campos obligatorios deben estar completos']
+        return null
+      }
+
+      // Llamar al servicio (que tiene sus propias validaciones)
+      const nuevoRequerimiento = await requerimientoService.crearRequerimiento(data)
+      
+      console.log('✅ Requerimiento creado exitosamente')
+      return nuevoRequerimiento
+    } catch (error) {
+      erroresValidacion.value = [error.message || 'Error al crear requerimiento']
+      console.error('❌ Error:', error)
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    erroresValidacion,
+    loading,
+    crearRequerimiento
+  }
+}
+```
+
+### Validación en Componentes Vue
+
+```vue
+<script setup>
+import { ref, reactive } from 'vue'
+import { useRequerimiento } from '@/composables/useRequerimiento'
+
+const { crearRequerimiento, erroresValidacion, loading } = useRequerimiento()
+
+const formulario = reactive({
+  tipo: '',
+  nombreCliente: '',
+  numeroPoliza: '',
+  telefono: '',
+  email: '',
+  prioridad: 'media',
+  descripcion: '',
+  observaciones: ''
+})
+
+const erroresLocales = ref([])
+
+const validarFormulario = () => {
+  erroresLocales.value = []
+
+  if (!formulario.nombreCliente || formulario.nombreCliente.trim().length < 3) {
+    erroresLocales.value.push('El nombre debe tener al menos 3 caracteres')
+  }
+
+  if (!formulario.telefono || !/^\d{9,}$/.test(formulario.telefono)) {
+    erroresLocales.value.push('Teléfono inválido (mínimo 9 dígitos)')
+  }
+
+  if (formulario.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formulario.email)) {
+    erroresLocales.value.push('Email con formato inválido')
+  }
+
+  return erroresLocales.value.length === 0
+}
+
+const handleSubmit = async () => {
+  // Validación local primero
+  if (!validarFormulario()) {
+    return
+  }
+
+  // Enviar al composable/servicio
+  const resultado = await crearRequerimiento(formulario)
+  
+  if (resultado) {
+    // Éxito - resetear formulario
+    Object.assign(formulario, {
+      tipo: '',
+      nombreCliente: '',
+      numeroPoliza: '',
+      telefono: '',
+      email: '',
+      prioridad: 'media',
+      descripcion: '',
+      observaciones: ''
+    })
+  }
+}
+</script>
+
+<template>
+  <form @submit.prevent="handleSubmit">
+    <!-- Mostrar errores -->
+    <div v-if="erroresLocales.length > 0 || erroresValidacion.length > 0" 
+         class="bg-red-50 border border-red-200 rounded p-4 mb-4">
+      <ul class="list-disc list-inside text-red-600">
+        <li v-for="error in [...erroresLocales, ...erroresValidacion]" :key="error">
+          {{ error }}
+        </li>
+      </ul>
+    </div>
+
+    <!-- Campos del formulario -->
+    <input 
+      v-model="formulario.nombreCliente"
+      type="text"
+      required
+      minlength="3"
+      maxlength="100"
+      placeholder="Nombre del cliente"
+    />
+
+    <input 
+      v-model="formulario.telefono"
+      type="tel"
+      required
+      pattern="[0-9]{9,15}"
+      placeholder="Teléfono"
+    />
+
+    <input 
+      v-model="formulario.email"
+      type="email"
+      placeholder="Email (opcional)"
+    />
+
+    <textarea 
+      v-model="formulario.descripcion"
+      required
+      minlength="10"
+      maxlength="5000"
+      placeholder="Descripción del requerimiento"
+    ></textarea>
+
+    <button type="submit" :disabled="loading">
+      {{ loading ? 'Guardando...' : 'Guardar Requerimiento' }}
+    </button>
+  </form>
+</template>
+```
+
+## Sanitización de Datos
+
+OBLIGATORIO - Sanitizar todos los inputs del usuario antes de procesarlos:
+
+```javascript
+/**
+ * Utilidades para sanitizar datos de entrada
+ */
+const sanitizarTexto = (texto, maxLength = 1000) => {
+  if (!texto) return ''
+  
+  // Eliminar espacios al inicio y final
+  let sanitizado = texto.trim()
+  
+  // Limitar longitud
+  sanitizado = sanitizado.substring(0, maxLength)
+  
+  // Escapar caracteres especiales HTML
+  sanitizado = sanitizado
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+  
+  return sanitizado
+}
+
+const sanitizarEmail = (email) => {
+  if (!email) return ''
+  return email.trim().toLowerCase()
+}
+
+const sanitizarTelefono = (telefono) => {
+  if (!telefono) return ''
+  // Solo números
+  return telefono.replace(/\D/g, '')
+}
+
+const sanitizarNumeroPoliza = (numeroPoliza) => {
+  if (!numeroPoliza) return ''
+  // Solo alfanuméricos y guiones
+  return numeroPoliza.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '')
+}
+
+/**
+ * Sanitiza un objeto completo de requerimiento
+ */
+const sanitizarRequerimiento = (data) => {
+  return {
+    tipo: data.tipo,  // Ya validado contra lista blanca
+    nombreCliente: sanitizarTexto(data.nombreCliente, 100),
+    numeroPoliza: sanitizarNumeroPoliza(data.numeroPoliza),
+    telefono: sanitizarTelefono(data.telefono),
+    email: sanitizarEmail(data.email),
+    prioridad: data.prioridad,  // Ya validado contra lista blanca
+    descripcion: sanitizarTexto(data.descripcion, 5000),
+    observaciones: sanitizarTexto(data.observaciones, 2000),
+    tipoSiniestro: data.tipoSiniestro || undefined,
+    tipoSolicitud: data.tipoSolicitud || undefined
+  }
+}
+
+// Uso en servicio
+export const requerimientoService = {
+  crearRequerimiento: async (data) => {
+    // 1. Validar
+    const errores = validarRequerimiento(data)
+    if (errores.length > 0) {
+      throw new Error(`Validación fallida: ${errores.join(', ')}`)
+    }
+
+    // 2. Sanitizar
+    const datosSanitizados = sanitizarRequerimiento(data)
+
+    // 3. Enviar a API
+    const response = await requerimientosApi.post('/requerimientos', datosSanitizados)
+    return response.data.data
+  }
+}
+```
+
+## Llamadas Seguras a APIs
+
+SIEMPRE usar parámetros de axios (no concatenar strings):
+
+```javascript
+import requerimientosApi from '@/api/requerimientos'
+
+// ✅ CORRECTO - Usar parámetros de axios
+const obtenerRequerimientos = async (filtros = {}) => {
+  // Axios sanitiza automáticamente los parámetros
+  const response = await requerimientosApi.get('/requerimientos', {
+    params: {
+      tipo: filtros.tipo,
+      prioridad: filtros.prioridad,
+      busqueda: filtros.busqueda?.trim()
+    }
+  })
+  return response.data
+}
+
+// ✅ CORRECTO - Validar ID antes de usar en URL
+const obtenerRequerimientoPorId = async (id) => {
+  // Validar que el ID sea seguro
+  if (!id || typeof id !== 'string' || id.length > 50) {
+    throw new Error('ID inválido')
+  }
+
+  // Sanitizar ID (solo alfanuméricos y guiones)
+  const idSanitizado = id.replace(/[^a-zA-Z0-9-]/g, '')
+
+  const response = await requerimientosApi.get(`/requerimientos/${idSanitizado}`)
+  return response.data.data
+}
+
+// ❌ PROHIBIDO - Concatenar valores del usuario en URL
+const obtenerRequerimientoMal = async (id) => {
+  // NUNCA: Concatenar directamente sin validar
+  // const response = await requerimientosApi.get(`/requerimientos?id=${id}`)
+}
+
+// ❌ PROHIBIDO - Template literals con valores sin validar
+const buscarMal = async (query) => {
+  // NUNCA: Usar template literals con input del usuario
+  // const response = await requerimientosApi.get(`/requerimientos/search?q=${query}`)
+}
+```
+
+## Protección contra XSS (Cross-Site Scripting)
+
+OBLIGATORIO - Escapar o sanitizar contenido antes de renderizarlo:
+
+```vue
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  requerimiento: {
+    type: Object,
+    required: true
+  }
+})
+
+// Sanitizar HTML si es necesario renderizarlo
+const descripcionSegura = computed(() => {
+  // Opción 1: Usar solo texto plano (recomendado)
+  return props.requerimiento.descripcion
+})
+</script>
+
+<template>
+  <!-- ✅ CORRECTO - Renderizar como texto plano (Vue escapa automáticamente) -->
+  <div>
+    <p>{{ requerimiento.descripcion }}</p>
+    <p>{{ requerimiento.nombreCliente }}</p>
+  </div>
+
+  <!-- ❌ PROHIBIDO - v-html con contenido sin sanitizar -->
+  <!-- <div v-html="requerimiento.descripcion"></div> -->
+
+  <!-- ⚠️ Si realmente necesitas HTML, sanitiza primero -->
+  <!-- <div v-html="descripcionSanitizada"></div> -->
+</template>
+```
+
+Si necesitas renderizar HTML (casos muy específicos), usa DOMPurify:
+
+```javascript
+// npm install dompurify
+
+import DOMPurify from 'dompurify'
+import { computed } from 'vue'
+
+const descripcionSanitizada = computed(() => {
+  return DOMPurify.sanitize(props.requerimiento.descripcion)
+})
+```
+
+## Configuración Segura de Axios
+
+OBLIGATORIO - Interceptores con manejo seguro:
+
+```javascript
+// src/api/requerimientos.js
+import axios from 'axios'
+import config from '@/config'
+
+const requerimientosApi = axios.create({
+  baseURL: config.API_REQUERIMIENTOS_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Interceptor de REQUEST
+requerimientosApi.interceptors.request.use(
+  (config) => {
+    // Agregar token de autenticación si existe
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+
+    // Sanitizar parámetros de query
+    if (config.params) {
+      Object.keys(config.params).forEach((key) => {
+        if (typeof config.params[key] === 'string') {
+          config.params[key] = config.params[key].trim()
+        }
+      })
+    }
+
+    // Log en desarrollo (sin datos sensibles)
+    if (import.meta.env.DEV) {
+      console.log(`🚀 [API Request] ${config.method?.toUpperCase()} ${config.url}`)
+    }
+
+    return config
+  },
+  (error) => {
+    console.error('❌ Error en request:', error)
+    return Promise.reject(error)
+  }
+)
+
+// Interceptor de RESPONSE
+requerimientosApi.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  (error) => {
+    const statusCode = error.response?.status
+
+    // NO exponer detalles del servidor en producción
+    if (import.meta.env.PROD) {
+      // Log mínimo en producción
+      console.error(`API Error ${statusCode}`)
+    } else {
+      // Log detallado en desarrollo
+      console.error('API Error:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        statusCode,
+        message: error.message
+      })
+    }
+
+    // Manejo específico por código
+    switch (statusCode) {
+      case 401:
+        // Sesión expirada - limpiar y redirigir
+        localStorage.clear()
+        window.location.href = '/login?error=sesion-expirada'
+        break
+      
+      case 403:
+        console.warn('⚠️ Acceso denegado')
+        break
+      
+      case 404:
+        console.warn('⚠️ Recurso no encontrado')
+        break
+      
+      case 422:
+        // Error de validación
+        console.warn('⚠️ Error de validación')
+        break
+      
+      case 500:
+      case 502:
+      case 503:
+        console.error('🔥 Error del servidor')
+        break
+    }
+
+    // Retornar error estructurado (sin exponer detalles sensibles)
+    return Promise.reject({
+      message: error.response?.data?.message || 'Error en la operación',
+      statusCode: statusCode || 500
+    })
+  }
+)
+
+export default requerimientosApi
+```
+
+## Protección de Tokens
+
+OBLIGATORIO - Manejo seguro de tokens:
+
+```javascript
+// ❌ PROHIBIDO - Almacenar credenciales en localStorage
+localStorage.setItem('password', 'secreto123')
+localStorage.setItem('username', 'usuario')
+
+// ✅ CORRECTO - Solo tokens temporales con expiración
+const guardarToken = (tokenData) => {
+  localStorage.setItem('auth_token', tokenData.accessToken)
+  localStorage.setItem('token_expiry', tokenData.expiresAt)
+}
+
+// ✅ CORRECTO - Verificar expiración antes de usar
+const getToken = () => {
+  const token = localStorage.getItem('auth_token')
+  const expiry = localStorage.getItem('token_expiry')
+  
+  if (!token || !expiry) {
+    return null
+  }
+  
+  // Verificar si expiró
+  if (new Date(expiry) < new Date()) {
+    localStorage.clear()
+    return null
+  }
+  
+  return token
+}
+
+// ✅ CORRECTO - Limpiar al cerrar sesión
+const cerrarSesion = () => {
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('token_expiry')
+  window.location.href = '/login'
+}
+```
+
+## Lista Blanca de Valores
+
+OBLIGATORIO - Validar contra listas blancas para campos con valores limitados:
+
+```javascript
+// Constantes con valores permitidos
+const TIPOS_REQUERIMIENTO = ['reclamo', 'solicitud', 'consulta', 'queja', 'sugerencia']
+const PRIORIDADES = ['baja', 'media', 'alta', 'urgente']
+const ESTADOS = ['pendiente', 'en_proceso', 'resuelto', 'rechazado']
+
+// Validación contra lista blanca
+const validarTipo = (tipo) => {
+  if (!TIPOS_REQUERIMIENTO.includes(tipo)) {
+    throw new Error(`Tipo inválido. Valores permitidos: ${TIPOS_REQUERIMIENTO.join(', ')}`)
+  }
+  return tipo
+}
+
+const validarPrioridad = (prioridad) => {
+  if (!PRIORIDADES.includes(prioridad)) {
+    throw new Error(`Prioridad inválida. Valores permitidos: ${PRIORIDADES.join(', ')}`)
+  }
+  return prioridad
+}
+
+// Uso en servicio
+const crearRequerimiento = async (data) => {
+  // Validar contra lista blanca
+  const tipo = validarTipo(data.tipo)
+  const prioridad = validarPrioridad(data.prioridad)
+  
+  // Continuar con creación
+  // ...
+}
+```
+
+## Límites de Tamaño
+
+OBLIGATORIO - Limitar tamaño de datos enviados:
+
+```javascript
+const LIMITES = {
+  NOMBRE_CLIENTE: 100,
+  NUMERO_POLIZA: 50,
+  TELEFONO: 15,
+  EMAIL: 100,
+  DESCRIPCION: 5000,
+  OBSERVACIONES: 2000
+}
+
+const validarLongitud = (valor, campo, limite) => {
+  if (valor && valor.length > limite) {
+    throw new Error(`${campo} no puede exceder ${limite} caracteres`)
+  }
+}
+
+const validarRequerimiento = (data) => {
+  validarLongitud(data.nombreCliente, 'Nombre del cliente', LIMITES.NOMBRE_CLIENTE)
+  validarLongitud(data.numeroPoliza, 'Número de póliza', LIMITES.NUMERO_POLIZA)
+  validarLongitud(data.telefono, 'Teléfono', LIMITES.TELEFONO)
+  validarLongitud(data.email, 'Email', LIMITES.EMAIL)
+  validarLongitud(data.descripcion, 'Descripción', LIMITES.DESCRIPCION)
+  validarLongitud(data.observaciones, 'Observaciones', LIMITES.OBSERVACIONES)
+}
+```
+
+---
+
+## Resumen de Seguridad
+
+✅ **SIEMPRE**:
+- Validar todos los inputs del usuario
+- Sanitizar datos antes de enviarlos a la API
+- Usar parámetros de axios (no concatenar URLs)
+- Validar contra listas blancas para valores limitados
+- Limitar longitud de campos
+- Escapar HTML (Vue lo hace automáticamente con `{{ }}`)
+- Manejar errores sin exponer información sensible
+- Verificar expiración de tokens
+
+❌ **NUNCA**:
+- Usar `v-html` con contenido sin sanitizar
+- Concatenar valores del usuario en URLs
+- Almacenar contraseñas en localStorage
+- Exponer stack traces en producción
+- Confiar en validación solo del frontend (backend debe validar también)
+- Usar `eval()` o `Function()` con input del usuario
