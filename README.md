@@ -137,7 +137,10 @@ Variables de entorno necesarias para levantar este servicio:
 ```env
 # URLs de APIs backend
 VITE_API_REQUERIMIENTOS_URL=http://localhost:3000/api
-VITE_API_CORREO_URL=http://localhost:3000/api/correo
+
+# API de Notificaciones de Interseguro (UAT)
+# Ver documentación: Confluence - Gobierno de APIs (ID: 169476564)
+VITE_API_CORREO_URL=https://is-cr-notify-api-notify-test-m3pd7zj7mq-uc.a.run.app
 
 # Configuración de la aplicación
 VITE_APP_NAME=Sistema de Requerimientos - DEV
@@ -150,6 +153,10 @@ VITE_API_TIMEOUT=30000
 
 # Duración de notificaciones (en milisegundos)
 VITE_NOTIFICATION_DURATION=3000
+
+# Configuración de correo
+VITE_CORREO_FROM_EMAIL=requerimientos@interseguro.com.pe
+VITE_CORREO_FROM_NAME=Sistema de Requerimientos - Interseguro
 ```
 
 ### Archivo `.env.production` (Producción)
@@ -157,7 +164,10 @@ VITE_NOTIFICATION_DURATION=3000
 ```env
 # URLs de APIs backend en producción
 VITE_API_REQUERIMIENTOS_URL=https://api.interseguro.com/requerimientos
-VITE_API_CORREO_URL=https://api.interseguro.com/correo
+
+# API de Notificaciones de Interseguro (PRD)
+# Ver documentación: Confluence - Gobierno de APIs (ID: 169476564)
+VITE_API_CORREO_URL=https://is-cr-notify-api-notify-master-m3pd7zj7mq-uc.a.run.app
 
 # Configuración de la aplicación
 VITE_APP_NAME=Sistema de Requerimientos
@@ -170,6 +180,10 @@ VITE_API_TIMEOUT=30000
 
 # Duración de notificaciones (en milisegundos)
 VITE_NOTIFICATION_DURATION=3000
+
+# Configuración de correo
+VITE_CORREO_FROM_EMAIL=requerimientos@interseguro.com.pe
+VITE_CORREO_FROM_NAME=Sistema de Requerimientos - Interseguro
 ```
 
 **Nota importante:** En Vite, todas las variables de entorno expuestas al cliente deben tener el prefijo `VITE_`. Las variables sin este prefijo no estarán disponibles en el código frontend.
@@ -185,8 +199,35 @@ El frontend espera las siguientes APIs backend:
 - `PUT /api/requerimientos/:id` - Actualizar requerimiento existente
 - `DELETE /api/requerimientos/:id` - Eliminar requerimiento
 
-**API de Correo:**
-- `POST /api/correo/enviar` - Enviar requerimiento por correo electrónico
+**API de Notificaciones (Interseguro):**
+- **Endpoint:** `POST /v1/notify/email` - Enviar email
+- **Documentación:** Confluence - Gobierno de APIs (ID: 169476564)
+- **UAT:** `https://is-cr-notify-api-notify-test-m3pd7zj7mq-uc.a.run.app`
+- **PRD:** `https://is-cr-notify-api-notify-master-m3pd7zj7mq-uc.a.run.app`
+- **Formato de Request:**
+  ```json
+  {
+    "title": "Requerimiento #123",
+    "subject": "Asunto del correo",
+    "htmlContent": "<html>...</html>",
+    "priority": "low|normal|high",
+    "from": {
+      "name": "Sistema de Requerimientos",
+      "email": "requerimientos@interseguro.com.pe"
+    },
+    "to": [
+      { "email": "destinatario@example.com" }
+    ]
+  }
+  ```
+- **Respuesta 201:**
+  ```json
+  {
+    "status": "success",
+    "message": "Email encolado correctamente",
+    "idCreated": "email-id-123"
+  }
+  ```
 
 Si no se configuran las APIs, la aplicación funciona con localStorage para desarrollo y pruebas locales.
 

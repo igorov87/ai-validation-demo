@@ -23,10 +23,13 @@ describe('correoService', () => {
         fechaRegistro: '2025-11-19 10:30:00'
       }
 
+      // Respuesta según API de Notificaciones de Interseguro
       const mockResponse = {
+        status: 201,
         data: {
-          success: true,
-          message: 'Correo enviado exitosamente'
+          status: 'success',
+          message: 'Email encolado correctamente',
+          idCreated: 'email-123-abc'
         }
       }
 
@@ -35,12 +38,23 @@ describe('correoService', () => {
       const resultado = await correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
 
       expect(resultado.success).toBe(true)
+      expect(resultado.emailId).toBe('email-123-abc')
+      expect(resultado.destinatario).toBe('juan@example.com')
+      
+      // Verificar que se llamó con el endpoint correcto
       expect(correoApi.post).toHaveBeenCalledWith(
-        '/enviar',
+        '/v1/notify/email',
         expect.objectContaining({
-          destinatario: 'juan@example.com',
-          asunto: 'Requerimiento #123 - Reclamo',
-          requerimientoId: '123'
+          title: 'Requerimiento #123',
+          subject: expect.stringContaining('Requerimiento #123'),
+          htmlContent: expect.any(String),
+          priority: 'high', // alta -> high
+          from: expect.objectContaining({
+            email: expect.any(String)
+          }),
+          to: expect.arrayContaining([
+            expect.objectContaining({ email: 'juan@example.com' })
+          ])
         })
       )
     })
@@ -57,8 +71,11 @@ describe('correoService', () => {
       }
 
       const mockResponse = {
+        status: 201,
         data: {
-          success: true
+          status: 'success',
+          message: 'Email encolado correctamente',
+          idCreated: 'email-456'
         }
       }
 
@@ -67,9 +84,11 @@ describe('correoService', () => {
       await correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
 
       expect(correoApi.post).toHaveBeenCalledWith(
-        '/enviar',
+        '/v1/notify/email',
         expect.objectContaining({
-          destinatario: 'maria@example.com'
+          to: expect.arrayContaining([
+            expect.objectContaining({ email: 'maria@example.com' })
+          ])
         })
       )
     })
@@ -86,8 +105,11 @@ describe('correoService', () => {
       }
 
       const mockResponse = {
+        status: 201,
         data: {
-          success: true
+          status: 'success',
+          message: 'Email encolado correctamente',
+          idCreated: 'email-789'
         }
       }
 
@@ -96,9 +118,11 @@ describe('correoService', () => {
       await correoService.enviarRequerimientoPorCorreo(mockRequerimiento, 'otro@example.com')
 
       expect(correoApi.post).toHaveBeenCalledWith(
-        '/enviar',
+        '/v1/notify/email',
         expect.objectContaining({
-          destinatario: 'otro@example.com'
+          to: expect.arrayContaining([
+            expect.objectContaining({ email: 'otro@example.com' })
+          ])
         })
       )
     })
@@ -138,6 +162,83 @@ describe('correoService', () => {
       await expect(
         correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
       ).rejects.toThrow('El email no tiene un formato válido')
+    })
+
+    it('debe mapear correctamente las prioridades al formato de la API', async () => {
+      const prioridades = [
+        { prioridadReq: 'baja', prioridadAPI: 'low' },
+        { prioridadReq: 'media', prioridadAPI: 'normal' },
+        { prioridadReq: 'alta', prioridadAPI: 'high' },
+        { prioridadReq: 'urgente', prioridadAPI: 'high' }
+      ]
+
+      const mockResponse = {
+        status: 201,
+        data: {
+          status: 'success',
+          message: 'Email encolado correctamente',
+          idCreated: 'email-test'
+        }
+      }
+
+      for (const { prioridadReq, prioridadAPI } of prioridades) {
+        vi.clearAllMocks()
+        vi.mocked(correoApi.post).mockResolvedValue(mockResponse)
+
+        const mockRequerimiento = {
+          id: '123',
+          tipo: 'consulta',
+          nombreCliente: 'Test User',
+          email: 'test@example.com',
+          telefono: '987654321',
+          prioridad: prioridadReq,
+          descripcion: 'Descripción de prueba'
+        }
+
+        await correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+
+        expect(correoApi.post).toHaveBeenCalledWith(
+          '/v1/notify/email',
+          expect.objectContaining({
+            priority: prioridadAPI
+          })
+        )
+      }
+    })
+
+    it('debe generar contenido HTML válido', async () => {
+      const mockRequerimiento = {
+        id: '123',
+        tipo: 'reclamo',
+        nombreCliente: 'Juan Pérez',
+        email: 'juan@example.com',
+        telefono: '987654321',
+        prioridad: 'alta',
+        descripcion: 'Descripción del reclamo',
+        numeroPoliza: 'POL-12345',
+        observaciones: 'Observaciones adicionales'
+      }
+
+      const mockResponse = {
+        status: 201,
+        data: {
+          status: 'success',
+          message: 'Email encolado correctamente',
+          idCreated: 'email-html-test'
+        }
+      }
+
+      vi.mocked(correoApi.post).mockResolvedValue(mockResponse)
+
+      await correoService.enviarRequerimientoPorCorreo(mockRequerimiento)
+
+      const llamada = vi.mocked(correoApi.post).mock.calls[0][1]
+      
+      expect(llamada.htmlContent).toContain('<!DOCTYPE html>')
+      expect(llamada.htmlContent).toContain('Juan Pérez')
+      expect(llamada.htmlContent).toContain('POL-12345')
+      expect(llamada.htmlContent).toContain('Descripción del reclamo')
+      expect(llamada.htmlContent).toContain('Observaciones adicionales')
     })
   })
 

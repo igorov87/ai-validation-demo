@@ -213,24 +213,22 @@ export default {
     }
 
     /**
-     * Envía un requerimiento por correo
+     * Envía un requerimiento por correo usando la API de Notificaciones de Interseguro
      */
     const enviarRequerimientoPorCorreo = async (requerimiento) => {
-      // En un entorno real, llamaríamos al servicio
-      // const resultado = await enviarPorCorreo(requerimiento)
-      
-      // Por ahora, simulamos el envío
-      notificacion.value = {
-        mensaje: `Correo enviado exitosamente a ${requerimiento.email}`,
-        tipo: 'success'
+      try {
+        // Llamar al servicio real de correo
+        const resultado = await enviarPorCorreo(requerimiento)
+        
+        if (resultado) {
+          console.log('✅ Correo enviado con ID:', resultado.emailId)
+        }
+      } catch (err) {
+        console.error('❌ Error al enviar correo:', err)
       }
       
-      console.log('📧 Enviando requerimiento por correo:', requerimiento)
-      
-      // Auto-ocultar notificación
-      setTimeout(() => {
-        notificacion.value = null
-      }, 3000)
+      // La notificación ya se maneja en el composable
+      // No necesitamos manejarla aquí
     }
 
     return {

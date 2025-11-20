@@ -5,7 +5,11 @@
 export default {
   // URLs de APIs
   API_REQUERIMIENTOS_URL: import.meta.env.VITE_API_REQUERIMIENTOS_URL || 'http://localhost:3000/api',
-  API_CORREO_URL: import.meta.env.VITE_API_CORREO_URL || 'http://localhost:3000/api/correo',
+  
+  // API de Notificaciones de Interseguro (según Confluence - Gobierno de APIs)
+  // UAT: https://is-cr-notify-api-notify-test-m3pd7zj7mq-uc.a.run.app
+  // PRD: https://is-cr-notify-api-notify-master-m3pd7zj7mq-uc.a.run.app
+  API_CORREO_URL: import.meta.env.VITE_API_CORREO_URL || 'https://is-cr-notify-api-notify-test-m3pd7zj7mq-uc.a.run.app',
   
   // Configuración de la aplicación
   APP_NAME: import.meta.env.VITE_APP_NAME || 'Sistema de Requerimientos',
@@ -18,6 +22,10 @@ export default {
   API_TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
   
   // Notificaciones
-  NOTIFICATION_DURATION: parseInt(import.meta.env.VITE_NOTIFICATION_DURATION || '3000')
+  NOTIFICATION_DURATION: parseInt(import.meta.env.VITE_NOTIFICATION_DURATION || '3000'),
+  
+  // Configuración de correo
+  CORREO_FROM_EMAIL: import.meta.env.VITE_CORREO_FROM_EMAIL || 'requerimientos@interseguro.com.pe',
+  CORREO_FROM_NAME: import.meta.env.VITE_CORREO_FROM_NAME || 'Sistema de Requerimientos - Interseguro'
 }
 

@@ -188,14 +188,14 @@ const obtenerRequerimientoPorId = async (id) => {
  * Crea un nuevo requerimiento
  */
 const crearRequerimiento = async (data) => {
-  // Validar datos
-  const errores = validarRequerimiento(data)
+  // Sanitizar datos primero
+  const datosSanitizados = sanitizarRequerimiento(data)
+
+  // Validar datos sanitizados
+  const errores = validarRequerimiento(datosSanitizados)
   if (errores.length > 0) {
     throw new Error(`Validación fallida: ${errores.join(', ')}`)
   }
-
-  // Sanitizar datos
-  const datosSanitizados = sanitizarRequerimiento(data)
 
   // Enviar a API
   const response = await requerimientosApi.post('/requerimientos', datosSanitizados)
@@ -217,14 +217,14 @@ const actualizarRequerimiento = async (id, data) => {
     throw new Error('ID inválido')
   }
 
-  // Validar datos
-  const errores = validarRequerimiento(data)
+  // Sanitizar datos primero
+  const datosSanitizados = sanitizarRequerimiento(data)
+
+  // Validar datos sanitizados
+  const errores = validarRequerimiento(datosSanitizados)
   if (errores.length > 0) {
     throw new Error(`Validación fallida: ${errores.join(', ')}`)
   }
-
-  // Sanitizar datos
-  const datosSanitizados = sanitizarRequerimiento(data)
 
   // Sanitizar ID
   const idSanitizado = String(id).replace(/[^a-zA-Z0-9-]/g, '')
